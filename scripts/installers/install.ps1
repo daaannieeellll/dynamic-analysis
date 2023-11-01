@@ -1,37 +1,61 @@
+# Disable the progress bar to avoid issues when running the script from SSH
+$ProgressPreference = 'SilentlyContinue'
+
+# Function to add a path to the system or user environment variable
+function Add-PathIfNotExists ([string]$PathToAdd,[System.EnvironmentVariableTarget]$Target)
+{
+    $ExistingPaths = [Environment]::GetEnvironmentVariable("Path", $Target)
+    if ($ExistingPaths -notlike "*$PathToAdd*")
+    {
+        $NewPaths = "$ExistingPaths;$PathToAdd"
+        [Environment]::SetEnvironmentVariable("Path", $NewPaths, $Target)
+    }
+}
+
 # Chocolatey Installation
 Set-ExecutionPolicy Bypass -Scope Process -Force
 [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
-iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
-$chocoBinPath = "$env:ProgramData\chocolatey\bin"
-[Environment]::SetEnvironmentVariable("Path", "$($env:Path);$chocoBinPath", [EnvironmentVariableTarget]::Machine)
+Invoke-Expression ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
 
 # Install Chocolatey packages
-choco install sysinternals --version 2023.7.26 --yes
-# Java packages
-choco install maven --version 3.6.3 --yes
-choco install ant --version 1.10.7 --yes
-choco install gradle --version 4.3 --yes
-choco install make --version 4.3 --yes
-choco install microsoft-openjdk11 --version 11.0.20 --yes
+Write-Output "Installing Chocolatey packages"
+choco install sysinternals --yes
+
+# Conda Installation
+Write-Output "Installing Miniconda"
+$MinicondaUrl = 'https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe'
+$MinicondaPath = Join-Path $env:TEMP 'miniconda3.exe'
+(New-Object System.Net.WebClient).DownloadFile($MinicondaUrl, $MinicondaPath)
+$MinicondaArgs = @(
+    '/S',
+    '/InstallationType=AllUsers',
+    "/D=$env:SystemDrive\miniconda3"
+)
+Start-Process -Wait -FilePath $MinicondaPath -ArgumentList $MinicondaArgs
 
 # Fakenet Installation
-$fakenetUrl = 'https://github.com/mandiant/flare-fakenet-ng/releases/download/v1.4.11/fakenet1.4.11.zip'
-$fakenetZipPath = Join-Path $env:TEMP 'fakenet1.4.11.zip'
-$fakenetExtractPath = "$env:SystemDrive\fakenet1.4.11"
-(New-Object System.Net.WebClient).DownloadFile($fakenetUrl, $fakenetZipPath)
-Expand-Archive -Path $fakenetZipPath -DestinationPath $fakenetExtractPath
+Write-Output "Installing Fakenet"
+$FakenetUrl = 'https://github.com/mandiant/flare-fakenet-ng/releases/download/v1.4.11/fakenet1.4.11.zip'
+$FakenetZipPath = Join-Path $env:TEMP 'fakenet1.4.11.zip'
+$FakenetExtractPath = "$env:SystemDrive\fakenet1.4.11"
+(New-Object System.Net.WebClient).DownloadFile($FakenetUrl, $FakenetZipPath)
+Expand-Archive -Path $FakenetZipPath -DestinationPath $FakenetExtractPath -Force
 
 # Update Path with necessary paths
-$additionalPaths = @(
-    "$env:ProgramFiles\Microsoft\jdk-11.0.20.8-hotspot\bin", # openjdk
-    "$env:SystemDrive\Python27", # python2
-    "$env:SystemDrive\Python311", # python3
+Write-Output "Updating Path"
+$PathsToAdd = @(
+    "$env:SystemDrive\miniconda3\Scripts",
+    "$FakenetExtractPath"
 )
-$additionalPathString = $additionalPaths -join ';'
-
-[Environment]::SetEnvironmentVariable("Path", "$($env:Path);$additionalPathString", [EnvironmentVariableTarget]::Machine)
+foreach ($PathToAdd in $PathsToAdd)
+{
+    Add-PathIfNotExists $PathToAdd [EnvironmentVariableTarget]::Machine
+}
 
 # Download Defender Remover
-$defenderRemoverUrl = 'https://github.com/ionuttbara/windows-defender-remover/releases/download/release_def_12_5_1/DefenderRemover.exe'
-$defenderRemoverPath = "$env:SystemDrive\DefenderRemover.exe"
-(New-Object System.Net.WebClient).DownloadFile($defenderRemoverUrl, $defenderRemoverPath)
+Write-Output "Downloading Defender Remover"
+$DefenderRemoverUrl = 'https://github.com/ionuttbara/windows-defender-remover/releases/download/release_def_12_5_1/DefenderRemover.exe'
+$DefenderRemoverPath = "$env:SystemDrive\DefenderRemover.exe"
+(New-Object System.Net.WebClient).DownloadFile($DefenderRemoverUrl, $DefenderRemoverPath)
+
+Write-Output "Installation Complete"
